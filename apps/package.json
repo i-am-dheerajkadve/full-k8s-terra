@@ -1,0 +1,22 @@
+{
+  "name": "2-tier-nodejs-app",
+  "version": "1.0.0",
+  "description": "A 2-tier Node.js application with frontend and backend",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node app.js"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "2-tier",
+    "docker"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
