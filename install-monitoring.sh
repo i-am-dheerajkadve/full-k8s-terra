@@ -47,4 +47,6 @@ echo "Press CTRL+C to stop port forwarding"
 kubectl port-forward svc/${RELEASE_NAME}-grafana -n $NAMESPACE $GRAFANA_PORT:80 &
 kubectl port-forward svc/${RELEASE_NAME}-kube-prometheus-prometheus -n $NAMESPACE $PROMETHEUS_PORT:9090 &
 
+kubectl get svc -n monitoring
+ kubectl port-forward svc/kube-prometheus-kube-prome-prometheus -n monitoring 9090:9090 Forwarding from 127.0.0.1:9090 -> 9090
 wait
