@@ -1,0 +1,88 @@
+name: Terraform EKS CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-south-1
+  TERRAFORM_DIR: terraform
+  APP_DIR: apps
+  K8S_DIR: k8s
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform apply -auto-approve
+
+      - name: Get Terraform Outputs
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          echo "ECR_REPOSITORY_URL=$(terraform output -raw ecr_repository_url)" >> $GITHUB_ENV
+          echo "EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> $GITHUB_ENV
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URL
+
+      - name: Build Docker image
+        run: |
+          docker build -t myapp:${{ github.sha }} $APP_DIR
+          docker tag myapp:${{ github.sha }} $ECR_REPOSITORY_URL:${{ github.sha }}
+          docker tag myapp:${{ github.sha }} $ECR_REPOSITORY_URL:latest
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push $ECR_REPOSITORY_URL:${{ github.sha }}
+          docker push $ECR_REPOSITORY_URL:latest
+
+      - name: Connect kubectl to EKS
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+      - name: Replace image in Kubernetes deployment
+        run: |
+          sed -i "s|nginx:latest|$ECR_REPOSITORY_URL:${{ github.sha }}|g" $K8S_DIR/deployment.yml
+
+      - name: Deploy app to EKS
+        run: |
+          kubectl apply -f $K8S_DIR/
+          kubectl rollout status deployment/my-deployment -n application
+
+      - name: Show application service
+        run: |
+          kubectl get svc -n application
+
+      - name: Install Prometheus and Grafana
+        run: |
+          chmod +x install-monitoring.sh
+          ./install-monitoring.sh
+
+      - name: Show monitoring services
+        run: |
+          kubectl get pods -n monitoring
+          kubectl get svc -n monitoring
