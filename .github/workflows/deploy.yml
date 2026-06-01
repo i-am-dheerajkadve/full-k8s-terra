@@ -60,9 +60,22 @@ jobs:
           docker push $ECR_REPOSITORY_URL:${{ github.sha }}
           docker push $ECR_REPOSITORY_URL:latest
 
-      - name: Connect kubectl to EKS
+      - name: Deploy app to EKS
         run: |
-          aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+          echo "Creating namespace..."
+          kubectl apply -f $K8S_DIR/namespace.yml
+
+          echo "Waiting for namespace creation..."
+          sleep 10
+
+          echo "Deploying application..."
+          kubectl apply -f $K8S_DIR/deployment.yml
+
+          echo "Creating service..."
+          kubectl apply -f $K8S_DIR/service.yml
+
+          echo "Waiting for deployment rollout..."
+          kubectl rollout status deployment/my-deployment -n application --timeout=300s
 
       - name: Replace image in Kubernetes deployment
         run: |
