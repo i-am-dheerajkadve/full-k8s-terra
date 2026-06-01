@@ -45,9 +45,16 @@ jobs:
           echo "ECR_REPOSITORY_URL=$(terraform output -raw ecr_repository_url)" >> $GITHUB_ENV
           echo "EKS_CLUSTER_NAME=$(terraform output -raw cluster_name)" >> $GITHUB_ENV
 
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $EKS_CLUSTER_NAME
+
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URL
+          ECR_REGISTRY=$(echo $ECR_REPOSITORY_URL | cut -d'/' -f1)
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
       - name: Build Docker image
         run: |
@@ -60,31 +67,16 @@ jobs:
           docker push $ECR_REPOSITORY_URL:${{ github.sha }}
           docker push $ECR_REPOSITORY_URL:latest
 
-      - name: Deploy app to EKS
-        run: |
-          echo "Creating namespace..."
-          kubectl apply -f $K8S_DIR/namespace.yml
-
-          echo "Waiting for namespace creation..."
-          sleep 10
-
-          echo "Deploying application..."
-          kubectl apply -f $K8S_DIR/deployment.yml
-
-          echo "Creating service..."
-          kubectl apply -f $K8S_DIR/service.yml
-
-          echo "Waiting for deployment rollout..."
-          kubectl rollout status deployment/my-deployment -n application --timeout=300s
-
       - name: Replace image in Kubernetes deployment
         run: |
           sed -i "s|nginx:latest|$ECR_REPOSITORY_URL:${{ github.sha }}|g" $K8S_DIR/deployment.yml
 
       - name: Deploy app to EKS
         run: |
-          kubectl apply -f $K8S_DIR/
-          kubectl rollout status deployment/my-deployment -n application
+          kubectl apply -f $K8S_DIR/namespace.yml
+          kubectl apply -f $K8S_DIR/deployment.yml
+          kubectl apply -f $K8S_DIR/service.yml
+          kubectl rollout status deployment/my-deployment -n application --timeout=300s
 
       - name: Show application service
         run: |
@@ -99,3 +91,21 @@ jobs:
         run: |
           kubectl get pods -n monitoring
           kubectl get svc -n monitoring
+
+      - name: Destroy Terraform if pipeline failed
+        if: failure()
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform destroy -auto-approve
+
+      - name: Wait 20 minutes after successful deployment
+        if: success()
+        run: |
+          echo "Pipeline successful. Waiting 20 minutes before destroying resources..."
+          sleep 1200
+
+      - name: Destroy Terraform after 20 minutes
+        if: success()
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          terraform destroy -auto-approve
