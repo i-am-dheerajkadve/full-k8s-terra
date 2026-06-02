@@ -50,3 +50,14 @@ echo "kubectl port-forward svc/${RELEASE_NAME}-grafana -n $NAMESPACE $GRAFANA_PO
 
 echo "To access Prometheus locally, run:"
 echo "kubectl port-forward svc/${RELEASE_NAME}-kube-prome-prometheus -n $NAMESPACE $PROMETHEUS_PORT:9090"
+
+
+# to install argocd into the eks
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl get pods -n argocd
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+echo -n "Password: "
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
+echo ""
