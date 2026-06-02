@@ -1,7 +1,6 @@
 name: Terraform EKS CI/CD
 
 on:
- 
   workflow_dispatch:
 
 env:
@@ -90,21 +89,26 @@ jobs:
         run: |
           kubectl get pods -n monitoring
           kubectl get svc -n monitoring
+          
+      - name: Wait 5 minutes before destroy
+        if: always()
+        run: |
+          echo "Waiting 5 minutes before destroying infrastructure..."
+          sleep 300
+          
+      - name: Cleanup Kubernetes resources before destroy
+        if: always()
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME || true
 
-      - name: Destroy Terraform if pipeline failed
-        if: failure()
+          kubectl delete -f $K8S_DIR/service.yml --ignore-not-found=true || true
+          kubectl delete -f $K8S_DIR/deployment.yml --ignore-not-found=true || true
+          kubectl delete -f $K8S_DIR/namespace.yml --ignore-not-found=true || true
+
+          helm uninstall kube-prometheus -n monitoring || true
+          kubectl delete namespace monitoring --ignore-not-found=true || true
+
+      - name: Terraform Destroy
+        if: always()
         working-directory: ${{ env.TERRAFORM_DIR }}
-        run: |
-          terraform destroy -auto-approve
-
-      - name: Wait 20 minutes after successful deployment
-        if: success()
-        run: |
-          echo "Pipeline successful. Waiting 20 minutes before destroying resources..."
-          sleep 1200
-
-      - name: Destroy Terraform after 20 minutes
-        if: success()
-        working-directory: ${{ env.TERRAFORM_DIR }}
-        run: |
-          terraform destroy -auto-approve
+        run: terraform destroy -auto-approve
