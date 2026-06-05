@@ -16,11 +16,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Trivy filesystem scan
+      - name: Run Trivy on terraform
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           scan-type: fs
-          scan-ref: .
+          scan-ref: ./terraform
           format: table
           severity: CRITICAL,HIGH
           exit-code: 0
+      - name: Run Trivy on k8s
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: ./k8s
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 0
+
+      - name: Run Trivy on apps
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: ./apps
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 0
+
+          
